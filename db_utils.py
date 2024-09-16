@@ -8,12 +8,8 @@ def get_mysql_connection():
     with open('secrets.json') as f:
         config = json.load(f)
 
-    connection = mysql.connector.connect(
-        host=config['mysql']['host'],
-        database=config['mysql']['database'],
-        user=config['mysql']['user'],
-        password=config['mysql']['password']
-    )
+    connection = mysql.connector.connect(host=config['mysql']['host'], database=config['mysql']['database'],
+                                         user=config['mysql']['user'], password=config['mysql']['password'])
     return connection
 
 
@@ -46,7 +42,6 @@ def get_db_last_update(cursor, table_name):
     cursor.execute(f"SELECT MAX(timestamp) FROM {table_name}")
     result = cursor.fetchone()
     return result[0] if result[0] else None
-
 
 
 def update_last_sync_time(cursor, connection):

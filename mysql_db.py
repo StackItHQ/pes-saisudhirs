@@ -1,6 +1,6 @@
-import mysql.connector
-from mysql.connector import Error
 import json
+
+import mysql.connector
 
 from google_sheet import read_sheet_data
 
@@ -9,12 +9,8 @@ def get_mysql_connection():
     with open('secrets.json') as f:
         secrets = json.load(f)
 
-    connection = mysql.connector.connect(
-        host=secrets['mysql']['host'],
-        database=secrets['mysql']['database'],
-        user=secrets['mysql']['user'],
-        password=secrets['mysql']['password']
-    )
+    connection = mysql.connector.connect(host=secrets['mysql']['host'], database=secrets['mysql']['database'],
+        user=secrets['mysql']['user'], password=secrets['mysql']['password'])
     return connection
 
 
