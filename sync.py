@@ -1,3 +1,4 @@
+import json
 import time
 from datetime import datetime
 
@@ -7,8 +8,11 @@ from google_sheet import read_sheet_data, get_sheet_last_update, update_google_s
 from mysql_db import get_mysql_connection, create_table, upsert_data
 from db_utils import create_sync_table, update_last_sync_time, get_db_last_update, fetch_all_data
 
-SPREADSHEET_ID = "1oGTbu5vgawZ9ueal9Dsp_IcsyPKijiRy2q9aGXqYn3g"
-RANGE_NAME = "Sheet1"
+with open('secrets.json') as f:
+    secrets = json.load(f)
+
+SPREADSHEET_ID = secrets['google']['spreadsheet_id']
+RANGE_NAME = secrets['google']['range_name']
 POLLING_INTERVAL = 10  # seconds
 
 
