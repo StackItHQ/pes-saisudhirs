@@ -1,7 +1,9 @@
-import json
-
 import mysql.connector
 from mysql.connector import Error
+import json
+
+from google_sheet import read_sheet_data
+
 
 def get_mysql_connection():
     with open('secrets.json') as f:
@@ -15,6 +17,7 @@ def get_mysql_connection():
     )
     return connection
 
+
 def create_table(cursor, table_name, num_columns):
     columns_def = ', '.join([f"col{i + 1} VARCHAR(255)" for i in range(num_columns)])
     create_table_query = f"""
@@ -27,40 +30,57 @@ def create_table(cursor, table_name, num_columns):
     """
     cursor.execute(create_table_query)
 
+
 def upsert_data(cursor, table_name, data):
-    num_columns = len(data[0]) if data else 0
+    # Determine the number of columns based on the longest row
+    num_columns = max(len(row) for row in data) if data else 0
+
+    if num_columns == 0:
+        print("No data to insert/update.")
+        return
 
     placeholders = ', '.join(['%s'] * num_columns)
-    update_placeholders = ', '.join([f"col{i + 1} = %s" for i in range(num_columns)])
+    update_placeholders = ', '.join([f"col{i + 1} = VALUES(col{i + 1})" for i in range(num_columns)])
 
     for row in data:
-        if not row:
-            continue
+        if len(row) < num_columns:
+            row += [None] * (num_columns - len(row))  # Pad with None if fewer columns
 
-        # Check for existing row
-        check_query = f"SELECT id FROM {table_name} WHERE " + ' AND '.join(
-            [f"col{i + 1} = %s" for i in range(num_columns)])
-        cursor.execute(check_query, tuple(row))
-        result = cursor.fetchone()
+        row_tuple = tuple(row)
 
-        if result:
-            # Update existing row
-            update_query = f"""
-            UPDATE {table_name}
-            SET {update_placeholders}, timestamp = CURRENT_TIMESTAMP
-            WHERE id = {result[0]};
-            """
-            try:
-                cursor.execute(update_query, tuple(row) + tuple(row))
-            except Error as err:
-                print(f"Update Error: {err}")
-        else:
-            # Insert new row
-            insert_query = f"""
-            INSERT INTO {table_name} ({', '.join([f'col{i + 1}' for i in range(num_columns)])})
-            VALUES ({placeholders});
-            """
-            try:
-                cursor.execute(insert_query, tuple(row))
-            except Error as err:
-                print(f"Insert Error: {err}")
+        query = f"""
+        INSERT INTO {table_name} ({', '.join([f'col{i + 1}' for i in range(num_columns)])})
+        VALUES ({placeholders})
+        ON DUPLICATE KEY UPDATE {update_placeholders}, timestamp = CURRENT_TIMESTAMP;
+        """
+
+        print("Upsert Query:", query)
+        print("Upsert Parameters:", row_tuple)
+
+        try:
+            cursor.execute(query, row_tuple)
+        except mysql.connector.Error as err:
+            print(f"Upsert Error: {err}")
+
+
+def sync_google_sheet_to_db(spreadsheet_id, range_name):
+    sheet_data = read_sheet_data(spreadsheet_id, range_name)
+    print(sheet_data)
+
+    cnx = get_mysql_connection()
+    cursor = cnx.cursor()
+
+    try:
+        num_columns = max(len(row) for row in sheet_data if row) if sheet_data else 0
+
+        create_table(cursor, range_name, num_columns)
+
+        processed_data = [[None if cell == '' else cell for cell in row] for row in sheet_data]
+        upsert_data(cursor, range_name, processed_data)
+
+        cnx.commit()
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    finally:
+        cursor.close()
+        cnx.close()
