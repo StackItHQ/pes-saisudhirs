@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 import mysql
 
@@ -11,6 +12,9 @@ RANGE_NAME = "Sheet1"
 POLLING_INTERVAL = 10  # seconds
 
 
+def clean_values(values):
+    return [[cell if cell is not None else '' for cell in row] for row in values]
+
 def sync_db_to_sheet(spreadsheet_id, range_name):
     cnx = get_mysql_connection()
     cursor = cnx.cursor()
@@ -18,8 +22,8 @@ def sync_db_to_sheet(spreadsheet_id, range_name):
         rows = fetch_all_data(cursor, range_name)
         if rows:
             # Convert rows from database to sheet format
-            sheet_data = [list(row[1:]) for row in rows]  # Exclude the id column
-            update_google_sheet(spreadsheet_id, range_name, sheet_data)
+            sheet_data = [list(row[2:]) for row in rows]  # Exclude the id column
+            update_google_sheet(spreadsheet_id, range_name, clean_values(sheet_data))
     except mysql.connector.Error as err:
         print(f"DB to Sheet Sync Error: {err}")
     finally:
@@ -46,18 +50,22 @@ def sync_google_sheet_to_db(spreadsheet_id, range_name):
 
 
 def sync_loop():
-    last_sync_sheet = None
-    last_sync_db = None
+    last_sync_sheet = 0
+    last_sync_db = 0
 
     while True:
         try:
             # Check for the last update times
             print("Checking last update times...")
-            sheet_last_update = get_sheet_last_update(SPREADSHEET_ID)
+            sheet_last_update = get_sheet_last_update(SPREADSHEET_ID) if not None else 0
 
             cnx = get_mysql_connection()
             cursor = cnx.cursor()
-            db_last_update = get_db_last_update(cursor, RANGE_NAME)
+            db_last_update_iso = get_db_last_update(cursor, RANGE_NAME)
+            db_last_update = int((datetime.strptime(str(db_last_update_iso), "%Y-%m-%d %H:%M:%S")).timestamp())
+            print(type(db_last_update), type(sheet_last_update))
+
+            # Convert the datetime object to a Unix timestamp
             cursor.close()
             cnx.close()
             print(sheet_last_update, db_last_update)
