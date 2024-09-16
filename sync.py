@@ -49,6 +49,26 @@ def sync_google_sheet_to_db(spreadsheet_id, range_name):
         cnx.close()
 
 
+def count_non_empty_rows(data):
+    """Count rows in data that are not entirely None or empty."""
+    non_empty_row_count = 0
+    for row in data:
+        # Check if any value in the row is non-empty
+        if any(cell for cell in row if cell not in (None, '')):
+            non_empty_row_count += 1
+    return non_empty_row_count
+
+def count_non_empty_cells(data):
+    """Count non-empty cells in the given data."""
+    print(data)
+    non_empty_cell_count = 0
+    for row in data:
+        for cell in row:
+            if cell not in (None, ''):
+                non_empty_cell_count += 1
+    return non_empty_cell_count
+
+
 def sync_loop():
     last_sync_sheet = 0
     last_sync_db = 0
@@ -63,21 +83,26 @@ def sync_loop():
             cursor = cnx.cursor()
             db_last_update_iso = get_db_last_update(cursor, RANGE_NAME)
             db_last_update = int((datetime.strptime(str(db_last_update_iso), "%Y-%m-%d %H:%M:%S")).timestamp())
-            print(type(db_last_update), type(sheet_last_update))
 
-            # Convert the datetime object to a Unix timestamp
+
+            # Fetch data from Google Sheets and database for comparison
+            sheet_data = read_sheet_data(SPREADSHEET_ID, RANGE_NAME)
+            db_data = fetch_all_data(cursor, RANGE_NAME)  # Implement fetching data from DB
+
+            # Count non-empty rows for comparison
+            sheet_non_empty_count = count_non_empty_cells(sheet_data)
+            db_non_empty_count = count_non_empty_cells(db_data) - (2*count_non_empty_rows(db_data))  # Exclude the header row
             cursor.close()
             cnx.close()
-            print(sheet_last_update, db_last_update)
+            print(f"Sheet rows: {sheet_non_empty_count}, DB rows: {db_non_empty_count}")
 
-            # Compare update times and perform sync
-            if sheet_last_update and (last_sync_sheet is None or sheet_last_update > last_sync_sheet):
-                print("Syncing data from Google Sheets to database...")
+            # Sync based on row counts
+            if sheet_non_empty_count > db_non_empty_count:
+                print("Google Sheets has more data, syncing to DB...")
                 sync_google_sheet_to_db(SPREADSHEET_ID, RANGE_NAME)
                 last_sync_sheet = sheet_last_update
-
-            if db_last_update and (last_sync_db is None or db_last_update > last_sync_db):
-                print("Syncing data from database to Google Sheets...")
+            elif db_non_empty_count > sheet_non_empty_count:
+                print("Database has more data, syncing to Google Sheets...")
                 sync_db_to_sheet(SPREADSHEET_ID, RANGE_NAME)
                 last_sync_db = db_last_update
 
