@@ -20,6 +20,8 @@ def get_mysql_connection():
 
 def create_table(cursor, table_name, num_columns):
     columns_def = ', '.join([f"col{i + 1} VARCHAR(255)" for i in range(num_columns)])
+    drop_table_query = f"DROP TABLE IF EXISTS {table_name};"
+    cursor.execute(drop_table_query)
     create_table_query = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
         id INT NOT NULL AUTO_INCREMENT UNIQUE,
